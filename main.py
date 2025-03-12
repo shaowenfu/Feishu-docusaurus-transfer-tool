@@ -24,7 +24,7 @@ def main():
         try:
             # 首先尝试使用parse_document_content解析
             document_structure = parse_document_content(doc_content)
-            print(f"成功解析文档结构，共有{len(document_structure)}个二级标题")
+            print(f"成功解析文档结构，共有{len(document_structure)}个一级标题")
         except Exception as e:
             print(f"使用parse_document_content解析失败: {str(e)}")
             print("尝试使用extract_document_structure解析...")
@@ -47,9 +47,9 @@ def main():
         generate_files(document_structure)
         print("成功生成目录和文件")
         
-        # 5. 更新Docusaurus配置
-        update_sidebar(document_structure)
-        print("成功更新Docusaurus配置")
+        # # 5. 更新Docusaurus配置
+        # update_sidebar(document_structure)
+        # print("成功更新Docusaurus配置")
         
         # # 6. 推送到Github
         # if push_to_github():

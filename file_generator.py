@@ -42,11 +42,25 @@ def generate_files(document_structure):
     根据文档结构生成目录和文件
     
     Args:
-        document_structure (dict): 解析后的文档结构
+        document_structure (dict): 解析后的文档结构，格式为：
+        {
+            "一级标题1": {
+                "介绍": "一级标题下的段落内容",
+                "二级标题1": "二级标题下的段落内容",
+                "二级标题2": "二级标题下的段落内容",
+                ...
+            },
+            "一级标题2": {
+                ...
+            },
+            ...
+        }
     """
-    for level2_title, level3_dict in document_structure.items():
-        # 创建二级标题对应的目录
-        category_name = level2_title
+    print(f"开始生成目录和文件，文档结构包含 {len(document_structure)} 个一级标题")
+    
+    for level1_title, content_dict in document_structure.items():
+        # 创建一级标题对应的目录
+        category_name = level1_title
         category_path = os.path.join(DOCS_PATH, sanitize_filename(category_name))
         
         # 确保目录存在
@@ -55,19 +69,32 @@ def generate_files(document_structure):
         # 创建_category_.json文件
         create_category_json(category_path, category_name)
         
-        # 为每个三级标题创建markdown文件
-        for level3_title, content in level3_dict.items():
-            file_name = sanitize_filename(level3_title) + ".md"
+        print(f"已创建目录: {category_name}")
+        
+        # 为每个内容项创建markdown文件
+        for title, content in content_dict.items():
+            # 如果标题是"XX介绍"格式，表示是一级标题下的直接段落
+            is_intro = title.endswith(f"{level1_title}介绍")
+            
+            # 创建文件名
+            file_name = sanitize_filename(title) + ".md"
             file_path = os.path.join(category_path, file_name)
             
             # 创建markdown文件内容
-            markdown_content = f"# {level3_title}\n\n{content}"
+            if is_intro:
+                # 对于介绍文件，使用一级标题作为标题
+                markdown_content = f"# {level1_title}\n\n{content}"
+            else:
+                # 对于二级标题文件，使用二级标题作为标题
+                markdown_content = f"# {title}\n\n{content}"
             
             # 写入文件
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
-                
-        print(f"已创建目录 {category_name} 及其下的文件")
+            
+            print(f"  - 已创建文件: {file_name}")
+        
+        print(f"目录 {category_name} 下共创建了 {len(content_dict)} 个文件")
 
 def update_sidebar(document_structure):
     """

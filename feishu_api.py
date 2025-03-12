@@ -76,14 +76,7 @@ def get_document_content():
     获取《命理Tips》文档的内容
     
     Returns:
-        dict: 文档内容的JSON对象，格式为：
-        {
-            "code": 0,
-            "data": {
-                "content": "markdown格式的文档内容"
-            },
-            "msg": "success"
-        }
+        dict: 文档内容的JSON对象
     
     Raises:
         Exception: 如果获取失败，抛出异常
@@ -97,9 +90,10 @@ def get_document_content():
         .build()
 
     # 构造请求对象
-    request = RawContentDocumentRequest.builder() \
+    request = ListDocumentBlockRequest.builder() \
         .document_id(DOC_TOKEN) \
-        .lang(0) \
+        .page_size(500) \
+        .document_revision_id(-1) \
         .build()
 
     print(f"正在获取文档内容，DOC_TOKEN: {DOC_TOKEN}")
@@ -107,7 +101,7 @@ def get_document_content():
     try:
         # 发起请求
         option = lark.RequestOption.builder().tenant_access_token(token).build()
-        response = client.docx.v1.document.raw_content(request, option)
+        response = client.docx.v1.document_block.list(request, option)
         
         print(f"飞书文档API响应状态码: {response.code}")
         
@@ -116,27 +110,34 @@ def get_document_content():
             error_msg = f"获取文档内容失败: {response.msg}"
             print(f"错误详情: {response.raw.content}")
             raise Exception(error_msg)
+        
+        # 将响应数据转换为可序列化的字典
+        result = {}
+        
+        # 提取items列表
+        if hasattr(response.data, 'items') and response.data.items is not None:
+            items = []
+            for item in response.data.items:
+                if hasattr(item, 'to_dict'):
+                    items.append(item.to_dict())
+                else:
+                    # 如果item没有to_dict方法，尝试手动转换
+                    item_dict = {}
+                    for attr in dir(item):
+                        if not attr.startswith('_') and not callable(getattr(item, attr)):
+                            item_dict[attr] = getattr(item, attr)
+                    items.append(item_dict)
+            result['items'] = items
+        
+        # 提取has_more字段
+        if hasattr(response.data, 'has_more'):
+            result['has_more'] = response.data.has_more
+        
+        # 提取page_token字段
+        if hasattr(response.data, 'page_token'):
+            result['page_token'] = response.data.page_token
             
-        # 处理业务结果
-        # 将SDK响应对象转换为字典格式
-        response_dict = {
-            "code": 0,
-            "data": {
-                "content": response.data.content
-            },
-            "msg": "success"
-        }
-        
-        # 保存原始响应内容到文件，用于调试
-        with open("raw_response.json", "w", encoding="utf-8") as f:
-            if hasattr(response.data, 'to_dict'):
-                json.dump(response.data.to_dict(), f, ensure_ascii=False, indent=2)
-            else:
-                json.dump({"content": response.data.content}, f, ensure_ascii=False, indent=2)
-        
-        print(f"已将原始响应内容保存到raw_response.json文件")
-        
-        return response_dict
+        return result
         
     except Exception as e:
         print(f"获取文档内容时发生错误: {str(e)}")
