@@ -1,14 +1,15 @@
 # 飞书文档迁移到Docusaurus工具
 
-这个工具用于将飞书文档内容迁移到Docusaurus网站，特别是将《命理Tips》文档内容转换为Markdown格式并集成到cantian-ai-wiki项目中。
+这个工具用于将飞书文档内容迁移到Docusaurus网站，并支持多语言自动翻译
 
 ## 功能概述
 
-1. 通过飞书API获取文档内容
+1. 通过飞书API获取文档全部块内容
 2. 解析文档结构，提取标题和正文
 3. 创建对应的目录和Markdown文件
 4. 更新Docusaurus配置
-5. 可选择推送到Github
+5. 自动翻译文档内容为多种语言（新增）
+6. 可选择推送到Github
 
 ## 目录结构
 
@@ -18,8 +19,11 @@ feishu-docusaurus/
 ├── feishu_api.py      # 飞书API相关函数
 ├── document_parser.py # 文档解析相关函数
 ├── file_generator.py  # 文件生成相关函数
+├── translator.py      # 翻译相关函数（新增）
 ├── main.py            # 主程序入口
-└── README.md          # 本文档
+├── README.md          # 本文档
+├── 多语言自动翻译指南.md  # 翻译功能使用指南（新增）
+└── 飞书文档同步与多语言翻译指导.md # 完整使用指南（新增）
 ```
 
 ## 使用方法
@@ -29,7 +33,7 @@ feishu-docusaurus/
 确保已安装Python 3.6+和必要的依赖：
 
 ```bash
-pip install requests
+pip install requests lark_oapi argparse
 ```
 
 ### 2. 配置参数
@@ -48,13 +52,62 @@ DOC_TOKEN = "文档的obj_token"  # 《命理Tips》文档的obj_token
 DOCUSAURUS_PATH = "Docusaurus项目路径"
 DOCS_PATH = f"{DOCUSAURUS_PATH}/docs"
 SIDEBAR_PATH = f"{DOCUSAURUS_PATH}/sidebars.ts"
+
+# 百度翻译API配置（新增）
+BAIDU_APP_ID = "你的百度翻译APP ID"
+BAIDU_SECRET_KEY = "你的百度翻译密钥"
+
+# 翻译配置（新增）
+TARGET_LANGUAGES = ["en", "ja", "ko", "zh-Hant"]  # 支持的目标语言
 ```
 
 ### 3. 运行脚本
 
+#### 基本命令
+
 ```bash
+# 基本用法 - 执行所有步骤(同步文档并翻译)
 python main.py
+
+# 只同步文档，不执行翻译
+python main.py --no-translate
+
+# 只执行翻译，不从飞书获取文档
+python main.py --only-translate
+
+# 从现有的Docusaurus项目生成文档结构
+python main.py --generate-structure
+
+# 从现有项目生成文档结构但不执行翻译
+python main.py --generate-structure --no-translate
 ```
+
+#### 翻译相关命令
+
+```bash
+# 指定要翻译的目标语言
+python main.py --languages en,ja,ko
+
+# 使用命令行指定百度翻译API密钥
+python main.py --baidu-app-id YOUR_APP_ID --baidu-secret-key YOUR_SECRET_KEY
+
+# 组合使用：指定语言和API密钥
+python main.py --languages en,ja --baidu-app-id YOUR_APP_ID --baidu-secret-key YOUR_SECRET_KEY
+
+# 只翻译特定语言的现有文档
+python main.py --only-translate --languages en,ja
+```
+
+#### 命令参数说明
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `--no-translate` | 跳过翻译步骤 | `python main.py --no-translate` |
+| `--only-translate` | 只执行翻译，不同步文档 | `python main.py --only-translate` |
+| `--generate-structure` | 从现有Docusaurus项目生成文档结构 | `python main.py --generate-structure` |
+| `--languages` | 指定目标翻译语言，用逗号分隔 | `python main.py --languages en,ja,ko` |
+| `--baidu-app-id` | 设置百度翻译API的APP ID | `python main.py --baidu-app-id YOUR_APP_ID` |
+| `--baidu-secret-key` | 设置百度翻译API的密钥 | `python main.py --baidu-secret-key YOUR_KEY` |
 
 ## 文档结构解析规则
 
@@ -115,11 +168,20 @@ python main.py
 - `update_sidebar()`: 更新Docusaurus的sidebars.ts文件
 - `push_to_github()`: 将更改推送到Github
 
+### translator.py（新增）
+
+负责翻译文档内容，保留Markdown格式。主要函数：
+
+- `translate_text()`: 使用百度翻译API翻译文本
+- `translate_markdown()`: 翻译Markdown内容，保留格式
+- `create_translation_file_structure()`: 创建翻译文件结构
+- `translate_document_structure()`: 翻译文档结构中的所有内容
+
 ### main.py
 
 主程序入口，协调各个模块的工作。主要函数：
 
-- `main()`: 主程序入口，按顺序执行各个步骤
+- `main()`: 主程序入口，按顺序执行各个步骤，支持命令行参数
 
 ## 贡献指南
 

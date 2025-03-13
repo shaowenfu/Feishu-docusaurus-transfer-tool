@@ -15,3 +15,12 @@ SIDEBAR_PATH = f"{DOCUSAURUS_PATH}/sidebars.ts"
 # API URLs
 AUTH_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 DOC_URL = "https://open.feishu.cn/open-apis/doc/v2/{}/content"
+
+# 百度翻译API配置
+# 请替换为你的百度翻译API密钥
+BAIDU_APP_ID = "Ofn4OCWZeySZEQPAzQl9Ck31"
+BAIDU_SECRET_KEY = "AxPKLsplPWcnKzuRBmozcq9zLqihW29C"
+
+# 翻译配置
+# 支持的目标语言列表
+TARGET_LANGUAGES = ["en", "ja", "ko", "zh-Hant"]  # 不包含zh-Hans（源语言）

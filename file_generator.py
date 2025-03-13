@@ -72,7 +72,8 @@ def generate_files(document_structure):
         print(f"已创建目录: {category_name}")
         
         # 为每个内容项创建markdown文件
-        for title, content in content_dict.items():
+        # 使用enumerate并设置start=1，确保每个新目录的sidebar_position从1开始
+        for position, (title, content) in enumerate(content_dict.items(), start=1):
             # 如果标题是"XX介绍"格式，表示是一级标题下的直接段落
             is_intro = title.endswith(f"{level1_title}介绍")
             
@@ -80,19 +81,28 @@ def generate_files(document_structure):
             file_name = sanitize_filename(title) + ".md"
             file_path = os.path.join(category_path, file_name)
             
+            # 创建frontmatter，position从1开始，确保每个目录下的文件独立编号
+            frontmatter = "---\n"
+            frontmatter += f"sidebar_position: {position}\n"  # 在每个新目录中重新从1开始计数
+            frontmatter += "hide_table_of_contents: true\n"
+            frontmatter += "hide_title: true\n"
+            if position == 1:  # 目录中的第一个文件
+                frontmatter += "pagination_prev: null\n"
+            if position == len(content_dict):  # 目录中的最后一个文件
+                frontmatter += "pagination_next: null\n"
+            frontmatter += "---\n\n"
+            
             # 创建markdown文件内容
             if is_intro:
-                # 对于介绍文件，使用一级标题作为标题
-                markdown_content = f"# {level1_title}\n\n{content}"
+                markdown_content = f"{frontmatter}# {level1_title}\n\n{content}"
             else:
-                # 对于二级标题文件，使用二级标题作为标题
-                markdown_content = f"# {title}\n\n{content}"
+                markdown_content = f"{frontmatter}# {title}\n\n{content}"
             
             # 写入文件
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
             
-            print(f"  - 已创建文件: {file_name}")
+            print(f"  - 已创建文件: {file_name} (position: {position})")
         
         print(f"目录 {category_name} 下共创建了 {len(content_dict)} 个文件")
 
@@ -167,6 +177,82 @@ def backup_sidebar():
     backup_path = SIDEBAR_PATH + ".bak"
     shutil.copy2(SIDEBAR_PATH, backup_path)
     print(f"已备份sidebars.ts文件到 {backup_path}")
+
+def generate_document_structure_from_docs():
+    """
+    从现有的Docusaurus项目的/docs目录中生成文档结构
+    
+    Returns:
+        dict: 生成的文档结构，格式为：
+        {
+            "一级标题1": {
+                "介绍": "一级标题下的段落内容",
+                "二级标题1": "二级标题下的段落内容",
+                "二级标题2": "二级标题下的段落内容",
+                ...
+            },
+            "一级标题2": {
+                ...
+            },
+            ...
+        }
+    """
+    document_structure = {}
+    
+    # 遍历docs目录
+    for item in os.listdir(DOCS_PATH):
+        item_path = os.path.join(DOCS_PATH, item)
+        
+        # 如果是目录，则视为一级标题
+        if os.path.isdir(item_path) and not item.startswith('.') and not item.startswith('_'):
+            category_name = item
+            document_structure[category_name] = {}
+            
+            # 检查是否有_category_.json文件
+            category_json_path = os.path.join(item_path, "_category_.json")
+            if os.path.exists(category_json_path):
+                try:
+                    with open(category_json_path, 'r', encoding='utf-8') as f:
+                        category_json = json.load(f)
+                        if 'label' in category_json:
+                            # 使用_category_.json中的label作为一级标题
+                            category_name = category_json['label']
+                            # 更新字典的键
+                            document_structure[category_name] = document_structure.pop(item)
+                except Exception as e:
+                    print(f"读取{category_json_path}时发生错误: {str(e)}")
+            
+            # 遍历一级标题目录下的文件
+            for file in os.listdir(item_path):
+                file_path = os.path.join(item_path, file)
+                
+                # 如果是markdown文件，则视为二级标题或介绍
+                if os.path.isfile(file_path) and file.endswith('.md') and not file.startswith('_'):
+                    # 读取文件内容
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        # 提取文件标题
+                        title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                        else:
+                            # 如果没有找到标题，使用文件名作为标题
+                            title = os.path.splitext(file)[0]
+                        
+                        # 如果文件名是"介绍"或类似的，则视为一级标题下的直接段落
+                        if title.lower() in ['介绍', 'introduction', f"{category_name}介绍"]:
+                            key = f"{category_name}介绍"
+                        else:
+                            key = title
+                        
+                        # 将内容添加到文档结构中
+                        document_structure[category_name][key] = content
+                    except Exception as e:
+                        print(f"读取{file_path}时发生错误: {str(e)}")
+    
+    return document_structure
 
 def push_to_github():
     """
