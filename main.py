@@ -80,9 +80,6 @@ def main():
                     print("请在config.py中设置BAIDU_APP_ID和BAIDU_SECRET_KEY，或使用--baidu-app-id和--baidu-secret-key参数")
                     sys.exit(1)
                 
-                # 创建翻译文件结构
-                create_translation_file_structure(document_structure, target_languages)
-                print("成功创建翻译文件结构")
                 
                 # 翻译文档内容
                 translate_document_structure(document_structure, target_languages, force_translate=args.force_translate)

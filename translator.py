@@ -304,7 +304,6 @@ def translate_markdown(markdown_content, to_lang):
     """
     # 分离frontmatter和正文
     frontmatter, content = split_frontmatter(markdown_content)
-
     
     # 将Markdown内容分割成行
     lines = content.split("\n")
@@ -313,11 +312,7 @@ def translate_markdown(markdown_content, to_lang):
     translated_lines = []
     in_code_block = False
     
-    # 标记是否已经处理过标题
-    title_processed = False
-    
     for line in lines:
-        # print(f"line: {line}")
         # 跳过空行
         if not line.strip():
             translated_lines.append("")
@@ -390,8 +385,6 @@ def translate_markdown(markdown_content, to_lang):
             
             # 添加回前导空格
             translated_line = leading_spaces + translated_content
-
-        # print(f"translated_line: {translated_line}")
         
         translated_lines.append(translated_line)
     
@@ -401,8 +394,11 @@ def translate_markdown(markdown_content, to_lang):
     # 修复格式错误
     translated_content = fix_markdown_format_errors(translated_content)
     
-    # 确保frontmatter在最前面，后面跟着内容确保顺序正确：frontmatter -> 标题 -> 内容
-    return f"{frontmatter}\n\n{translated_content}"
+    # 如果有frontmatter，确保它正确格式化并放在最前面
+    if frontmatter:
+        return f"{frontmatter}\n\n{translated_content}"
+    else:
+        return translated_content
 
 def split_frontmatter(markdown_content):
     """
@@ -422,9 +418,16 @@ def split_frontmatter(markdown_content):
         # 查找第二个"---"
         parts = markdown_content.split("---", 2)
         if len(parts) >= 3:
-            # 保留完整的frontmatter，确保格式正确（移除多余空格）
+            # 保留完整的frontmatter，确保格式正确（保留原始格式，不添加额外空格）
             frontmatter_content = parts[1].strip()
-            frontmatter = f"---\n{frontmatter_content}\n---"
+            # 确保每行的缩进是正确的，没有额外空格
+            formatted_lines = []
+            for line in frontmatter_content.split('\n'):
+                formatted_lines.append(line.strip())
+            
+            formatted_frontmatter = '\n'.join(formatted_lines)
+            frontmatter = f"---\n{formatted_frontmatter}\n---"
+            
             # 提取正文部分并去除开头的空行
             content = parts[2].lstrip()
             return frontmatter, content
@@ -548,7 +551,7 @@ def extract_format_and_content(paragraph):
 
 def create_translation_file_structure(document_structure, target_languages=None):
     """
-    为目标语言创建翻译文件结构
+    为目标语言创建翻译文件结构，保持目录名为中文
     
     Args:
         document_structure (dict): 解析后的文档结构
@@ -579,34 +582,32 @@ def create_translation_file_structure(document_structure, target_languages=None)
         
         # 遍历文档结构，为每个一级标题创建目录
         for level1_title, content_dict in document_structure.items():
-            # 创建一级标题对应的目录
+            # 创建一级标题对应的目录（使用原始中文名）
             category_name = level1_title
-            category_path = os.path.join(i18n_docs_path, category_name)
+            category_path = os.path.join(i18n_docs_path, sanitize_filename(category_name))
             
             # 确保目录存在
             os.makedirs(category_path, exist_ok=True)
             
-            # 创建_category_.json文件
-            create_translated_category_json(category_path, category_name, lang)
+            # 创建_category_.json文件（翻译显示标签，但保持目录名为中文）
+            translated_category = translate_text(category_name, to_lang=lang)
+            create_translated_category_json(category_path, translated_category, lang)
             
-            print(f"  已创建目录: {category_name}")
+            print(f"  已创建目录: {category_name} (显示为: {translated_category})")
 
-def create_translated_category_json(category_path, category_name, lang):
+def create_translated_category_json(category_path, translated_label, lang):
     """
     创建翻译后的分类_category_.json文件
     
     Args:
         category_path (str): 分类目录路径
-        category_name (str): 分类名称
+        translated_label (str): 已翻译的显示标签
         lang (str): 目标语言代码
     """
     category_json_path = os.path.join(category_path, "_category_.json")
     
-    # 翻译分类名称
-    translated_name = translate_text(category_name, to_lang=lang)
-    
     category_json_content = {
-        "label": translated_name,
+        "label": translated_label,
         "position": 2  # 可以根据需要调整位置
     }
     
@@ -615,7 +616,7 @@ def create_translated_category_json(category_path, category_name, lang):
 
 def translate_document_structure(document_structure, target_languages=None, force_translate=False):
     """
-    翻译文档结构中的所有内容，包括文件名
+    翻译文档结构中的所有内容，保持目录名和文件名为中文
     """
     if target_languages is None:
         target_languages = list(DOCUSAURUS_LANGUAGE_PATHS.keys())
@@ -647,25 +648,25 @@ def translate_document_structure(document_structure, target_languages=None, forc
         
         # 遍历文档结构，翻译每个文件
         for level1_title, content_dict in document_structure.items():
-            # 翻译一级标题（目录名）
-            translated_category = translate_text(level1_title, to_lang=lang)
-            category_path = os.path.join(i18n_docs_path, sanitize_filename(translated_category))
+            # 使用原始中文目录名（不翻译目录名）
+            category_name = level1_title
+            category_path = os.path.join(i18n_docs_path, sanitize_filename(category_name))
             
             # 确保目录存在
             os.makedirs(category_path, exist_ok=True)
             
-            # 创建翻译后的_category_.json文件
+            # 创建翻译后的_category_.json文件（只翻译显示标签，不翻译目录名）
+            translated_category = translate_text(level1_title, to_lang=lang)
             create_translated_category_json(category_path, translated_category, lang)
             
-            print(f"  已创建目录: {translated_category}")
+            print(f"  已创建目录: {category_name} (显示为: {translated_category})")
             
             # 为每个内容项创建翻译后的markdown文件
             for title, content in content_dict.items():
                 translation_stats['total_files'] += 1
                 
-                # 翻译文件标题
-                translated_title = translate_text(title, to_lang=lang)
-                file_name = sanitize_filename(translated_title) + ".md"
+                # 使用原始中文文件名（不翻译文件名）
+                file_name = sanitize_filename(title) + ".md"
                 file_path = os.path.join(category_path, file_name)
                 
                 # 检查文件是否已存在
@@ -681,20 +682,12 @@ def translate_document_structure(document_structure, target_languages=None, forc
                         print(f"    - 现有文件 {file_name} 读取失败，将重新翻译: {str(e)}")
                 
                 try:
-                    # 创建markdown文件内容，保留标题结构
-                    if title.endswith(f"{level1_title}介绍"):
-                        # 对于介绍文件，使用翻译后的一级标题
-                        markdown_content = f"### {translated_category}\n\n{content}"
-                    else:
-                        # 对于其他文件，使用翻译后的标题
-                        markdown_content = f"### {translated_title}\n\n{content}"
+                    # 直接使用原始内容进行翻译，不添加额外的标题
+                    markdown_content = content
                     
                     # 翻译markdown内容
                     translated_content = translate_markdown(markdown_content, lang)
-                    print(f"translated_content: {translated_content}")
-                    # 删除文件前四行
-                    translated_content = translated_content.split('\n', 4)[4]
-                    print(f"translated_content: {translated_content}")
+                    
                     # 写入文件
                     with open(file_path, 'w', encoding='utf-8') as f:
                         f.write(translated_content)

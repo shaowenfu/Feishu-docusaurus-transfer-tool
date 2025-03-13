@@ -1,5 +1,6 @@
 import os
 import sys
+from dotenv import load_dotenv
 from translator import (
     set_baidu_api_keys,
     translate_markdown,
@@ -10,9 +11,12 @@ from translator import (
 def test_markdown_translation():
     """测试Markdown文档翻译功能"""
     
-    # 设置百度翻译API密钥（请替换为你的实际密钥）
-    API_KEY = "Ofn4OCWZeySZEQPAzQl9Ck31"
-    SECRET_KEY = "AxPKLsplPWcnKzuRBmozcq9zLqihW29C"
+    # 加载环境变量
+    load_dotenv()
+    
+    # 设置百度翻译API密钥
+    API_KEY = os.getenv("BAIDU_APP_ID")
+    SECRET_KEY = os.getenv("BAIDU_SECRET_KEY")
     set_baidu_api_keys(API_KEY, SECRET_KEY)
     
     # 读取源文件
@@ -61,6 +65,21 @@ def check_markdown_format(content):
     # 检查frontmatter
     if not content.startswith("---"):
         print("警告：frontmatter 可能丢失")
+    else:
+        # 检查frontmatter格式
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            frontmatter = parts[1].strip()
+            print(f"Frontmatter内容:\n{frontmatter}")
+            
+            # 检查frontmatter是否有效
+            try:
+                import yaml
+                yaml_data = yaml.safe_load(f"---\n{frontmatter}\n---")
+                print("Frontmatter YAML格式有效")
+                print(f"YAML数据: {yaml_data}")
+            except Exception as e:
+                print(f"警告：Frontmatter YAML格式无效: {str(e)}")
     
     # 检查标题格式
     if "###" not in content:
