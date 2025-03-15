@@ -26,8 +26,8 @@ DOCUSAURUS_LANGUAGE_PATHS = {
     "en": "en",
     "ja": "ja",
     "ko": "ko",
-    "zh-Hans": "zh_cn",
-    "zh-Hant": "zh_tw"
+    "zh-Hans": "zh-Hant",  # 修正为小写连字符格式
+    "zh-Hant": "zh-Hant"
 }
 
 def set_baidu_api_keys(api_key: str, secret_key: str):
@@ -71,6 +71,7 @@ def translate_text(text: str, from_lang: str = "zh", to_lang: str = "en", max_re
     Returns:
         str: 翻译后的文本，如果翻译失败则返回原文本
     """
+    
     if not API_KEY or not SECRET_KEY:
         raise ValueError("百度翻译API的密钥未设置，请在config.py中配置")
     
@@ -549,13 +550,14 @@ def extract_format_and_content(paragraph):
     # 默认情况
     return "", paragraph
 
-def create_translation_file_structure(document_structure, target_languages=None):
+def create_translation_file_structure(document_structure, target_languages=None, use_llm=False):
     """
     为目标语言创建翻译文件结构，保持目录名为中文
     
     Args:
         document_structure (dict): 解析后的文档结构
         target_languages (list): 目标语言代码列表，默认为None（使用所有支持的语言）
+        use_llm (bool): 是否使用大模型翻译，如果为True则不使用百度翻译API
     """
     if target_languages is None:
         target_languages = list(DOCUSAURUS_LANGUAGE_PATHS.keys())
@@ -590,7 +592,9 @@ def create_translation_file_structure(document_structure, target_languages=None)
             os.makedirs(category_path, exist_ok=True)
             
             # 创建_category_.json文件（翻译显示标签，但保持目录名为中文）
+
             translated_category = translate_text(category_name, to_lang=lang)
+            
             create_translated_category_json(category_path, translated_category, lang)
             
             print(f"  已创建目录: {category_name} (显示为: {translated_category})")
@@ -617,6 +621,7 @@ def create_translated_category_json(category_path, translated_label, lang):
 def translate_document_structure(document_structure, target_languages=None, force_translate=False):
     """
     翻译文档结构中的所有内容，保持目录名和文件名为中文
+    对于英文翻译，同时创建在docs和i18n/en目录下
     """
     if target_languages is None:
         target_languages = list(DOCUSAURUS_LANGUAGE_PATHS.keys())
@@ -652,14 +657,25 @@ def translate_document_structure(document_structure, target_languages=None, forc
             category_name = level1_title
             category_path = os.path.join(i18n_docs_path, sanitize_filename(category_name))
             
-            # 确保目录存在
+            # 如果是英文翻译，同时准备docs目录下的对应路径
+            docs_category_path = None
+            if lang == "en":
+                docs_category_path = os.path.join(DOCS_PATH, sanitize_filename(category_name))
+                os.makedirs(docs_category_path, exist_ok=True)
+                
+                # 为docs目录创建_category_.json文件
+                translated_category = translate_text(level1_title, to_lang=lang)
+                create_translated_category_json(docs_category_path, translated_category, lang)
+                print(f"  已在docs目录创建目录: {category_name} (显示为: {translated_category})")
+            
+            # 确保i18n目录存在
             os.makedirs(category_path, exist_ok=True)
             
             # 创建翻译后的_category_.json文件（只翻译显示标签，不翻译目录名）
             translated_category = translate_text(level1_title, to_lang=lang)
             create_translated_category_json(category_path, translated_category, lang)
             
-            print(f"  已创建目录: {category_name} (显示为: {translated_category})")
+            print(f"  已在i18n目录创建目录: {category_name} (显示为: {translated_category})")
             
             # 为每个内容项创建翻译后的markdown文件
             for title, content in content_dict.items():
@@ -669,7 +685,13 @@ def translate_document_structure(document_structure, target_languages=None, forc
                 file_name = sanitize_filename(title) + ".md"
                 file_path = os.path.join(category_path, file_name)
                 
-                # 检查文件是否已存在
+                # 如果是英文翻译，同时准备docs目录下的对应文件路径
+                docs_file_path = None
+                if lang == "en":
+                    docs_file_path = os.path.join(docs_category_path, file_name)
+                
+                # 检查i18n文件是否已存在
+                skip_translation = False
                 if os.path.exists(file_path) and not force_translate:
                     try:
                         with open(file_path, 'r', encoding='utf-8') as f:
@@ -677,27 +699,45 @@ def translate_document_structure(document_structure, target_languages=None, forc
                         if existing_content:
                             print(f"    - 跳过已存在的文件: {file_name}")
                             translation_stats['skipped_files'] += 1
-                            continue
+                            skip_translation = True
                     except Exception as e:
                         print(f"    - 现有文件 {file_name} 读取失败，将重新翻译: {str(e)}")
                 
-                try:
-                    # 直接使用原始内容进行翻译，不添加额外的标题
-                    markdown_content = content
-                    
-                    # 翻译markdown内容
-                    translated_content = translate_markdown(markdown_content, lang)
-                    
-                    # 写入文件
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write(translated_content)
-                    
-                    print(f"    - 已翻译文件: {file_name}")
-                    translation_stats['translated_files'] += 1
-                    
-                except Exception as e:
-                    print(f"    - 翻译文件 {file_name} 失败: {str(e)}")
-                    translation_stats['failed_files'] += 1
+                if not skip_translation:
+                    try:
+                        # 直接使用原始内容进行翻译，不添加额外的标题
+                        markdown_content = content
+                        
+                        # 翻译markdown内容
+                        translated_content = translate_markdown(markdown_content, lang)
+                        
+                        # 写入i18n文件
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(translated_content)
+                        
+                        # 如果是英文翻译，同时写入docs目录
+                        if lang == "en" and docs_file_path:
+                            with open(docs_file_path, 'w', encoding='utf-8') as f:
+                                f.write(translated_content)
+                            print(f"    - 已翻译文件并写入docs目录: {file_name}")
+                        else:
+                            print(f"    - 已翻译文件: {file_name}")
+                        
+                        translation_stats['translated_files'] += 1
+                        
+                    except Exception as e:
+                        print(f"    - 翻译文件 {file_name} 失败: {str(e)}")
+                        translation_stats['failed_files'] += 1
+                elif lang == "en" and docs_file_path:
+                    # 如果跳过翻译但是是英文，仍然需要复制到docs目录
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            existing_content = f.read()
+                        with open(docs_file_path, 'w', encoding='utf-8') as f:
+                            f.write(existing_content)
+                        print(f"    - 已复制现有翻译到docs目录: {file_name}")
+                    except Exception as e:
+                        print(f"    - 复制文件 {file_name} 到docs目录失败: {str(e)}")
             
             print(f"  目录 {translated_category} 翻译完成")
         

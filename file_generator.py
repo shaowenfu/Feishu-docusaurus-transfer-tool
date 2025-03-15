@@ -3,6 +3,7 @@ import os
 import re
 import json
 import subprocess
+import shutil
 from config import DOCS_PATH, SIDEBAR_PATH, DOCUSAURUS_PATH
 
 def sanitize_filename(name):
@@ -37,6 +38,15 @@ def create_category_json(category_path, category_name):
     with open(category_json_path, 'w', encoding='utf-8') as f:
         json.dump(category_json_content, f, ensure_ascii=False, indent=2)
 
+def get_zh_Hans_docs_path():
+    """
+    获取简体中文文档路径
+    
+    Returns:
+        str: 简体中文文档路径
+    """
+    return os.path.join(DOCUSAURUS_PATH, "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current")
+
 def generate_files(document_structure):
     """
     根据文档结构生成目录和文件
@@ -58,10 +68,18 @@ def generate_files(document_structure):
     """
     print(f"开始生成目录和文件，文档结构包含 {len(document_structure)} 个一级标题")
     
+    # 使用简体中文文档路径而不是docs路径
+    zh_Hans_docs_path = get_zh_Hans_docs_path()
+    
+    # 确保简体中文文档目录存在
+    os.makedirs(zh_Hans_docs_path, exist_ok=True)
+    
+    print(f"将文档同步到简体中文目录: {zh_Hans_docs_path}")
+    
     for level1_title, content_dict in document_structure.items():
         # 创建一级标题对应的目录
         category_name = level1_title
-        category_path = os.path.join(DOCS_PATH, sanitize_filename(category_name))
+        category_path = os.path.join(zh_Hans_docs_path, sanitize_filename(category_name))
         
         # 确保目录存在
         os.makedirs(category_path, exist_ok=True)
@@ -180,7 +198,7 @@ def backup_sidebar():
 
 def generate_document_structure_from_docs():
     """
-    从现有的Docusaurus项目的/docs目录中生成文档结构
+    从现有的Docusaurus项目的i18n/zh-Hans目录中生成文档结构
     
     Returns:
         dict: 生成的文档结构，格式为：
@@ -196,6 +214,78 @@ def generate_document_structure_from_docs():
             },
             ...
         }
+    """
+    document_structure = {}
+    
+    # 使用简体中文文档路径
+    zh_Hans_docs_path = get_zh_Hans_docs_path()
+    
+    # 如果简体中文目录不存在，则尝试从docs目录生成
+    if not os.path.exists(zh_Hans_docs_path):
+        print(f"简体中文目录 {zh_Hans_docs_path} 不存在，尝试从docs目录生成")
+        return generate_document_structure_from_default_docs()
+    
+    # 遍历简体中文目录
+    for item in os.listdir(zh_Hans_docs_path):
+        item_path = os.path.join(zh_Hans_docs_path, item)
+        
+        # 如果是目录，则视为一级标题
+        if os.path.isdir(item_path) and not item.startswith('.') and not item.startswith('_'):
+            category_name = item
+            document_structure[category_name] = {}
+            
+            # 检查是否有_category_.json文件
+            category_json_path = os.path.join(item_path, "_category_.json")
+            if os.path.exists(category_json_path):
+                try:
+                    with open(category_json_path, 'r', encoding='utf-8') as f:
+                        category_json = json.load(f)
+                        if 'label' in category_json:
+                            # 使用_category_.json中的label作为一级标题
+                            category_name = category_json['label']
+                            # 更新字典的键
+                            document_structure[category_name] = document_structure.pop(item)
+                except Exception as e:
+                    print(f"读取{category_json_path}时发生错误: {str(e)}")
+            
+            # 遍历一级标题目录下的文件
+            for file in os.listdir(item_path):
+                file_path = os.path.join(item_path, file)
+                
+                # 如果是markdown文件，则视为二级标题或介绍
+                if os.path.isfile(file_path) and file.endswith('.md') and not file.startswith('_'):
+                    # 读取文件内容
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        
+                        # 提取文件标题
+                        title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+                        if title_match:
+                            title = title_match.group(1).strip()
+                        else:
+                            # 如果没有找到标题，使用文件名作为标题
+                            title = os.path.splitext(file)[0]
+                        
+                        # 如果文件名是"介绍"或类似的，则视为一级标题下的直接段落
+                        if title.lower() in ['介绍', 'introduction', f"{category_name}介绍"]:
+                            key = f"{category_name}介绍"
+                        else:
+                            key = title
+                        
+                        # 将内容添加到文档结构中
+                        document_structure[category_name][key] = content
+                    except Exception as e:
+                        print(f"读取{file_path}时发生错误: {str(e)}")
+    
+    return document_structure
+
+def generate_document_structure_from_default_docs():
+    """
+    从现有的Docusaurus项目的/docs目录中生成文档结构
+    
+    Returns:
+        dict: 生成的文档结构
     """
     document_structure = {}
     
@@ -253,6 +343,45 @@ def generate_document_structure_from_docs():
                         print(f"读取{file_path}时发生错误: {str(e)}")
     
     return document_structure
+
+def copy_english_to_docs(en_i18n_path, docs_path):
+    """
+    将英文翻译文件从i18n/en目录复制到docs目录
+    
+    Args:
+        en_i18n_path (str): 英文翻译文件的i18n路径
+        docs_path (str): docs目录路径
+    """
+    print(f"将英文翻译文件从 {en_i18n_path} 复制到 {docs_path}")
+    
+    # 确保docs目录存在
+    os.makedirs(docs_path, exist_ok=True)
+    
+    # 遍历英文翻译目录
+    for item in os.listdir(en_i18n_path):
+        item_path = os.path.join(en_i18n_path, item)
+        target_path = os.path.join(docs_path, item)
+        
+        # 如果是目录，递归复制
+        if os.path.isdir(item_path):
+            # 确保目标目录存在
+            os.makedirs(target_path, exist_ok=True)
+            
+            # 复制目录内容
+            for file in os.listdir(item_path):
+                file_path = os.path.join(item_path, file)
+                target_file_path = os.path.join(target_path, file)
+                
+                if os.path.isfile(file_path):
+                    shutil.copy2(file_path, target_file_path)
+                    print(f"  - 已复制文件: {file} 到 {target_path}")
+        
+        # 如果是文件，直接复制
+        elif os.path.isfile(item_path):
+            shutil.copy2(item_path, target_path)
+            print(f"  - 已复制文件: {item} 到 {docs_path}")
+    
+    print("英文翻译文件复制完成")
 
 def push_to_github():
     """
